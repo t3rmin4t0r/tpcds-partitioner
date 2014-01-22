@@ -261,7 +261,12 @@ public class ParTable extends Configured implements Tool {
 			if(key.equals("")) {
 				return String.format("%s=__HIVE_DEFAULT_PARTITION__/", dt_label);
 			}
-			Integer off = Integer.valueOf(key);
+			Integer off;
+			try {
+				off = Integer.valueOf(key);
+			} catch(NumberFormatException ne) {
+				return null;
+			}
 			try {
 				c.setTime(sdf.parse(dt));
 			} catch(ParseException pe) {
@@ -282,6 +287,10 @@ public class ParTable extends Configured implements Tool {
 				key.path = getPath(cols[keyPos]);
 			} else {
 				key.path = getPath("");
+			}
+			if(key.path == null) {
+				// not well-formed row
+				return nextKeyValue();
 			}
 			for(int i: this.sortKeys) {
 				int k = Math.abs(i);
