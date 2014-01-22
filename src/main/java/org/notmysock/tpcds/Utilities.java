@@ -9,6 +9,19 @@ import java.security.*;
 import java.util.concurrent.*;
 
 public abstract class Utilities {
+	
+	public static int[] parseSorts(String sorts) {
+		if(sorts == null || "".equals(sorts)) {
+			return new int[0];
+		}
+		String [] fields = sorts.split(",");
+		int[] r = new int[fields.length];
+		for(int i = 0; i < r.length; i++) {
+			r[i] = Integer.parseInt(fields[i]);
+		}
+		return r;
+	}
+	
 	public static File findContainingJar(Class my_class) {
 		ClassLoader loader = my_class.getClassLoader();
 		String class_file = my_class.getName().replaceAll("\\.", "/")

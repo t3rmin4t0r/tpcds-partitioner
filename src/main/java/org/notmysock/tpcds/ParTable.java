@@ -49,7 +49,8 @@ public class ParTable extends Configured implements Tool {
         options.addOption("l", "label", true, "label");
         options.addOption("c", "columns", true, "columns");
         options.addOption("s", "sorted", true, "sorted");
-        
+
+        // defaults to ORC
         options.addOption("t", "table", true, "table");
         
         CommandLine line = parser.parse(options, remainingArgs);
@@ -60,10 +61,11 @@ public class ParTable extends Configured implements Tool {
           return 1;
         }
         
-        int parallel = 100;
+        int parallel = 2099;
         int key = 0;
         String label = "date";
         String columns = "";
+        String sorts = "";
 
         if(line.hasOption("parallel")) {
           parallel = Integer.parseInt(line.getOptionValue("parallel"));
@@ -81,6 +83,11 @@ public class ParTable extends Configured implements Tool {
         	columns = line.getOptionValue("columns");
         } else {
         	System.err.println("Missing columns - should be using something like intx11,floatx12");
+        	return 1;
+        }
+        
+        if(line.hasOption("sorted")) {
+        	sorts = line.getOptionValue("sorted");
         }
         
         if(parallel == 1) {
@@ -96,6 +103,7 @@ public class ParTable extends Configured implements Tool {
         conf.setInt("mapred.task.timeout",0);
         conf.setInt("mapreduce.task.timeout",0);
         conf.setInt("org.notmysock.tpcds.part.key", key);
+        conf.set("org.notmysockj.tpcds.part.sort", sorts);
         conf.set("org.notmysock.tpcds.part.label", label);
         conf.set("org.notmysock.tpcds.part.cols", columns);
         conf.setBoolean("mapred.compress.map.output", true);
@@ -113,7 +121,7 @@ public class ParTable extends Configured implements Tool {
         job.setNumReduceTasks(parallel);
         job.setInputFormatClass(KeyInputFormat.class);
         job.setReducerClass(MultiFileSink.class);
-        job.setOutputKeyClass(Text.class);
+        job.setOutputKeyClass(Key.class);
         job.setOutputValueClass(Text.class);
 
         FileInputFormat.addInputPath(job, in);
@@ -130,17 +138,54 @@ public class ParTable extends Configured implements Tool {
         return 0;
     }
     
-    public static final class MultiFileSink extends Reducer<Text, Text, Text, Text> {
+    public static final class Key implements Writable, WritableComparable<Key> {
+    	String path = null;
+    	int[] fields = new int[0];
+    	
+		@Override
+		public void readFields(DataInput in) throws IOException {
+			this.path = in.readUTF();
+			final int n = in.readUnsignedByte();
+			this.fields = new int[n];
+			for(int i = 0; i < n; i++) {
+				this.fields[i] = in.readInt();
+			}
+		}
+
+		@Override
+		public void write(DataOutput out) throws IOException {		
+			out.writeUTF(path);
+			out.writeByte(fields.length);
+			for(int x: fields) {
+				out.writeInt(x);
+			}
+		}
+		
+		@Override 
+		public int hashCode() {
+			return this.path.hashCode();
+		}
+
+		@Override
+		public int compareTo(Key k1) {
+			int v1 = k1.path.compareTo(this.path);
+			if(v1 == 0) {
+				for(int i = 0; i < this.fields.length ; i++) {
+					if (k1.fields[i] != this.fields[i]) {
+						return (this.fields[i] < k1.fields[i]) ? -1 : 1;
+					}
+				}
+			}
+			return v1;
+		}
+     }
+    
+    public static final class MultiFileSink extends Reducer<Key, Text, Text, Text> {
     	private MultipleOutputs<Text, Text> mos;
-		private String dt = "1900-01-02";  // Start date
-		private int DATE_BASE = 2415022;
-		private String dt_label = "sold_date";
-		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-		Calendar c = Calendar.getInstance();
+    	private String previousPath = null;
 
 		protected void setup(Context context) throws IOException {
 			mos = new MultipleOutputs<Text, Text>(context);
-			dt_label = context.getConfiguration().get("org.notmysock.tpcds.part.label");
 		}
 
 		protected void cleanup(Context context) throws IOException,
@@ -148,6 +193,70 @@ public class ParTable extends Configured implements Tool {
 			mos.close();
 		}
 		
+		@Override
+	    public void reduce(Key key, Iterable<Text> values, Context context) 
+	        throws IOException, InterruptedException {
+			String path = key.path;
+			for(Text v: values) {
+				mos.write("orc", null, v, path);
+			}
+			if(previousPath != null && previousPath.equals(path) == false) {
+				// new path, close old file
+				CustomOrcOutputFormat.flushWriters(context);
+			}
+			previousPath = path;
+		}
+    }
+    
+    public static final class KeyInputFormat extends FileInputFormat<Key, Text> {
+    	  @Override
+          public RecordReader<Key,Text> createRecordReader(InputSplit input,  TaskAttemptContext context)
+              throws IOException, InterruptedException {
+        	int key = context.getConfiguration().getInt("org.notmysock.tpcds.part.key", 0);
+        	int[] sorts = Utilities.parseSorts(context.getConfiguration().get("org.notmysock.tpcds.part.sort"));
+            RecordReader<Key, Text> reader =  new KeyReader(key, sorts);
+            reader.initialize(input, context);
+            return reader;
+          }
+          @Override
+          protected boolean isSplitable(JobContext context, Path filename) {
+            return false;
+          }
+    }
+    
+    public static final class KeyReader extends RecordReader<Key,Text> {
+		private LineRecordReader lineReader = new LineRecordReader();
+		private Key key = new Key();
+		private Text value = new Text();
+		private int keyPos = 0;
+		private int[] sortKeys = new int[0];
+
+		private String dt = "1900-01-02"; // Start date
+		private int DATE_BASE = 2415022;
+		private String dt_label = "sold_date";
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+		Calendar c = Calendar.getInstance();
+    	 
+		public KeyReader(int keyPos, int[] sortKeys) {
+			this.keyPos = keyPos;
+			this.sortKeys = sortKeys;
+			key.fields = new int[sortKeys.length];
+		}
+
+		public void initialize(InputSplit split, TaskAttemptContext context)
+				throws IOException {
+			dt_label = context.getConfiguration().get("org.notmysock.tpcds.part.label");
+			lineReader.initialize(split, context);
+		}
+
+		public Key getCurrentKey() {
+			return key;
+		}
+
+		public Text getCurrentValue() {
+			return value;
+		}
+
 		private String getPath(String key) throws IOException {
 			if(key.equals("")) {
 				return String.format("%s=__HIVE_DEFAULT_PARTITION__/", dt_label);
@@ -161,54 +270,6 @@ public class ParTable extends Configured implements Tool {
 			c.add(Calendar.DATE, off.intValue() - DATE_BASE);  // number of days to add
 			return String.format("%s=%s/", dt_label, sdf.format(c.getTime()));  // dt is now the new date
 		}
-		
-		@Override
-	    public void reduce(Text key, Iterable<Text> values, Context context) 
-	        throws IOException, InterruptedException {
-			String path = getPath(key.toString());
-			for(Text v: values) {
-				mos.write("orc", null, v, path);
-			}
-			CustomOrcOutputFormat.flushWriters(context);
-		}
-    }
-    
-    public static final class KeyInputFormat extends FileInputFormat<Text, Text> {
-    	  @Override
-          public RecordReader<Text,Text> createRecordReader(InputSplit input,  TaskAttemptContext context)
-              throws IOException, InterruptedException {
-        	int key = context.getConfiguration().getInt("org.notmysock.tpcds.part.key", 0);
-            RecordReader<Text, Text> reader =  new KeyReader(key);
-            reader.initialize(input, context);
-            return reader;
-          }
-          @Override
-          protected boolean isSplitable(JobContext context, Path filename) {
-            return false;
-          }
-    }
-    
-    public static final class KeyReader extends RecordReader<Text,Text> {
-    	 private LineRecordReader lineReader = new LineRecordReader();
-    	 private Text key = new Text();
-    	 private Text value = new Text();
-    	 private int keyPos = 0;
-    	 
-    	 public KeyReader(int key) {
-    		 this.keyPos = key;
-    	 }
-    	 
-    	 public void initialize(InputSplit split, TaskAttemptContext context) throws IOException {
-    		 lineReader.initialize(split, context);
-    	 }
-    	 
-		public Text getCurrentKey() {
-			return key;
-		}
-
-		public Text getCurrentValue() {
-			return value;
-		}
 
 		public boolean nextKeyValue() throws IOException {
 			// get the next line
@@ -218,9 +279,20 @@ public class ParTable extends Configured implements Tool {
 			Text lineValue = lineReader.getCurrentValue();
 			String[] cols = lineValue.toString().split("\\|");
 			if(keyPos < cols.length) {
-				key.set(cols[keyPos]);
+				key.path = getPath(cols[keyPos]);
 			} else {
-				key.set("");
+				key.path = getPath("");
+			}
+			for(int i: this.sortKeys) {
+				int k = Math.abs(i);
+				if(cols.length <= k) {
+					key.fields[k] = 0;
+				} else if ("".equals(cols[i])) {
+					key.fields[k] = 0;
+				} else {
+					key.fields[k] = Integer.signum(i)
+							* Integer.parseInt(cols[k]);
+				}
 			}
 			value.set(lineValue);
 			return true;
