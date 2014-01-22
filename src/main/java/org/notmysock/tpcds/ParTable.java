@@ -32,6 +32,16 @@ public class ParTable extends Configured implements Tool {
         int res = ToolRunner.run(conf, new ParTable(), args);
         System.exit(res);
     }
+    
+    private enum Tables {
+    	store_sales,
+    	store_returns,
+    	inventory,
+    	catalog_sales,
+    	catalog_returns,
+    	web_sales,
+    	web_returns
+    }
 
     @Override
     public int run(String[] args) throws Exception {
@@ -61,7 +71,7 @@ public class ParTable extends Configured implements Tool {
           return 1;
         }
         
-        int parallel = 2099;
+        int parallel = 0;
         int key = 0;
         String label = "date";
         String columns = "";
@@ -71,25 +81,72 @@ public class ParTable extends Configured implements Tool {
           parallel = Integer.parseInt(line.getOptionValue("parallel"));
         }
         
-        if(line.hasOption("key")) {
-            key = Integer.parseInt(line.getOptionValue("key"));
-        }
-        
-        if(line.hasOption("label")) {
-        	label = line.getOptionValue("label");
-        }
-        
-        if(line.hasOption("columns")) {
-        	columns = line.getOptionValue("columns");
-        } else {
-        	System.err.println("Missing columns - should be using something like intx11,floatx12");
-        	return 1;
-        }
-        
-        if(line.hasOption("sorted")) {
-        	sorts = line.getOptionValue("sorted");
-        }
-        
+		if (!line.hasOption("table")) {
+
+			if (line.hasOption("key")) {
+				key = Integer.parseInt(line.getOptionValue("key"));
+			}
+
+			if (line.hasOption("label")) {
+				label = line.getOptionValue("label");
+			}
+
+			if (line.hasOption("columns")) {
+				columns = line.getOptionValue("columns");
+			} else {
+				System.err.println("Missing columns - should be using something like intx11,floatx12");
+				return 1;
+			}
+
+			if (line.hasOption("sorted")) {
+				sorts = line.getOptionValue("sorted");
+			}
+		} else {
+			Tables t = Tables.valueOf(line.getOptionValue("table"));
+			key = 0; // for all tables
+			switch(t) {
+				case store_sales: {
+					label = "ss_sold_date";
+					columns = "intx11,floatx12";
+					sorts = "2,7"; // item_sk and store_sk
+				} break;
+				case store_returns: {
+					label = "sr_returned_date";
+					columns = "intx11,floatx9";
+					sorts = "2"; // item_sk
+				} break;
+				case web_sales: {
+					label = "ws_sold_date";
+					columns = "intx19,floatx15";
+					sorts = "3"; // item_sk
+				} break;
+				case web_returns: {
+					label = "wr_returned_date";
+					columns = "intx15,floatx9";
+					sorts = "2";
+				} break;
+				case catalog_sales: {
+					label = "cs_sold_date";
+					columns = "intx19,floatx15";
+					sorts = "15,6";
+				} break;
+				case catalog_returns: {
+					label = "cr_returned_date";
+					columns = "intx18,floatx9";
+					sorts="2,3";
+				}
+				case inventory: {
+					label = "inv_date";
+					columns = "intx4";
+					sorts = "1,2";
+				}
+				default: {
+					System.err.println("Unknown table type " + line.getOptionValue("table"));
+					return 1;
+				}
+			}
+		}
+
         if(parallel == 1) {
           System.err.println("The MR task does not work for scale=1 or parallel=1");
           return 1;
@@ -113,6 +170,15 @@ public class ParTable extends Configured implements Tool {
 		fs.copyFromLocalFile(new Path(Utilities
 				.findContainingJar(OrcFile.class).toURI()), hiveJar);
 		fs.deleteOnExit(hiveJar);
+		fs.deleteOnExit(tmpPath);
+		
+		if(parallel == 0) {
+			final long reducerSize = 512*1024*1024;
+			ContentSummary cs = fs.getContentSummary(in);
+			long size = cs.getSpaceConsumed();
+			parallel = (int)(size/reducerSize);
+			System.out.println("Estimating reducer count to " + parallel);
+		}
 		
         DistributedCache.addArchiveToClassPath(hiveJar, conf);
 
@@ -233,7 +299,7 @@ public class ParTable extends Configured implements Tool {
 
 		private String dt = "1900-01-02"; // Start date
 		private int DATE_BASE = 2415022;
-		private String dt_label = "sold_date";
+		private String dt_label = "date";
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
 		Calendar c = Calendar.getInstance();
     	 
