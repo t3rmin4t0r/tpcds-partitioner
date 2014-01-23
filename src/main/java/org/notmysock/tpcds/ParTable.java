@@ -136,12 +136,12 @@ public class ParTable extends Configured implements Tool {
 					label = "cr_returned_date";
 					columns = "intx18,floatx9";
 					sorts="2,3";
-				}
+				} break;
 				case inventory: {
 					label = "inv_date";
 					columns = "intx4";
 					sorts = "1,2";
-				}
+				} break;
 				default: {
 					System.err.println("Unknown table type " + line.getOptionValue("table"));
 					return 1;
