@@ -235,7 +235,8 @@ public class ParTable extends Configured implements Tool {
 		@Override 
 		public int hashCode() {
 			if(this.path.contains("__HIVE_DEFAULT_PARTITION__")) {
-				return this.path.hashCode() + (sprayHash++);
+				// generate at most 61 files
+				return this.path.hashCode() + ((sprayHash++) % 61);
 			}
 			return this.path.hashCode();
 		}
