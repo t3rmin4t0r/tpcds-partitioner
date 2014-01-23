@@ -7,8 +7,6 @@ import java.util.List;
 import org.apache.hadoop.hive.serde2.objectinspector.*;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorFactory.ObjectInspectorOptions;
 
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
-
 public final class RawDataObjectInspector extends SettableStructObjectInspector {
 	
 	public static class RawColumn implements StructField {
@@ -52,7 +50,7 @@ public final class RawDataObjectInspector extends SettableStructObjectInspector 
 			} else if("string".equals(types[i])) {
 				t = String.class;
 			} else {
-				throw new NotImplementedException();
+				throw new UnsupportedOperationException();
 			}
 			fields.add(new RawColumn(i, types[i], ObjectInspectorFactory
 					.getReflectionObjectInspector(t,
@@ -62,12 +60,12 @@ public final class RawDataObjectInspector extends SettableStructObjectInspector 
 
 	@Override
 	public Object create() {
-		throw new NotImplementedException();
+		throw new UnsupportedOperationException();
 	}
 
 	@Override
 	public Object setStructFieldData(Object arg0, StructField arg1, Object arg2) {
-		throw new NotImplementedException();
+		throw new UnsupportedOperationException();
 	}
 
 	@Override
@@ -87,14 +85,13 @@ public final class RawDataObjectInspector extends SettableStructObjectInspector 
 			}
 		}
 		
-		throw new NotImplementedException();
+		throw new UnsupportedOperationException();
 		
 	}
 
 	@Override
 	public StructField getStructFieldRef(String name) {
-		// TODO Auto-generated method stub
-		throw new NotImplementedException();
+		throw new UnsupportedOperationException();
 	}
 
 	@Override
