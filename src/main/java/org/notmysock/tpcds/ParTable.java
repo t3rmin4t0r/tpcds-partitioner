@@ -60,8 +60,10 @@ public class ParTable extends Configured implements Tool {
         options.addOption("c", "columns", true, "columns");
         options.addOption("s", "sorted", true, "sorted");
 
-        // defaults to ORC
         options.addOption("t", "table", true, "table");
+
+        // defaults to ORC for now
+        options.addOption("f", "format", true, "format");
         
         CommandLine line = parser.parse(options, remainingArgs);
 
@@ -227,8 +229,14 @@ public class ParTable extends Configured implements Tool {
 			}
 		}
 		
+		/* This prevents bad keys from overloading a single reducer */
+		public static int sprayHash = 0;
+		
 		@Override 
 		public int hashCode() {
+			if(this.path.contains("__HIVE_DEFAULT_PARTITION__")) {
+				return this.path.hashCode() + (sprayHash++);
+			}
 			return this.path.hashCode();
 		}
 
