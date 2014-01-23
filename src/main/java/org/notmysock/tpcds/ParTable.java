@@ -271,12 +271,12 @@ public class ParTable extends Configured implements Tool {
 	    public void reduce(Key key, Iterable<Text> values, Context context) 
 	        throws IOException, InterruptedException {
 			String path = key.path;
-			for(Text v: values) {
-				mos.write("orc", null, v, path);
-			}
 			if(previousPath != null && previousPath.equals(path) == false) {
 				// new path, close old file
 				CustomOrcOutputFormat.flushWriters(context);
+			}
+			for(Text v: values) {
+				mos.write("orc", null, v, path);
 			}
 			previousPath = path;
 		}
