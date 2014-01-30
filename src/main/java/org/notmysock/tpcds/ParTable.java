@@ -208,15 +208,15 @@ public class ParTable extends Configured implements Tool {
     
     public static final class Key implements Writable, WritableComparable<Key> {
     	String path = null;
-    	int[] fields = new int[0];
+    	long[] fields = new long[0];
     	
 		@Override
 		public void readFields(DataInput in) throws IOException {
 			this.path = in.readUTF();
 			final int n = in.readUnsignedByte();
-			this.fields = new int[n];
+			this.fields = new long[n];
 			for(int i = 0; i < n; i++) {
-				this.fields[i] = in.readInt();
+				this.fields[i] = in.readLong();
 			}
 		}
 
@@ -224,8 +224,8 @@ public class ParTable extends Configured implements Tool {
 		public void write(DataOutput out) throws IOException {		
 			out.writeUTF(path);
 			out.writeByte(fields.length);
-			for(int x: fields) {
-				out.writeInt(x);
+			for(long x: fields) {
+				out.writeLong(x);
 			}
 		}
 		
@@ -315,7 +315,7 @@ public class ParTable extends Configured implements Tool {
 		public KeyReader(int keyPos, int[] sortKeys) {
 			this.keyPos = keyPos;
 			this.sortKeys = sortKeys;
-			key.fields = new int[sortKeys.length];
+			key.fields = new long[sortKeys.length];
 		}
 
 		public void initialize(InputSplit split, TaskAttemptContext context)
@@ -374,8 +374,8 @@ public class ParTable extends Configured implements Tool {
 				} else if ("".equals(cols[i])) {
 					key.fields[k] = 0;
 				} else {
-					key.fields[k] = Integer.signum(i)
-							* Integer.parseInt(cols[k]);
+					key.fields[k] = Long.signum(i)
+							* Long.parseLong(cols[k]);
 				}
 			}
 			value.set(lineValue);

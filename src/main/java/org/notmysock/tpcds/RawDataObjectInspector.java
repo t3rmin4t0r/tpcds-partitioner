@@ -42,9 +42,9 @@ public final class RawDataObjectInspector extends SettableStructObjectInspector 
 
 	public RawDataObjectInspector(String[] types) {
 		for(int i = 0; i < types.length; i++) {
-			Type t = Integer.class;
+			Type t = Long.class;
 			if("int".equals(types[i])) {
-				t = Integer.class;
+				t = Long.class;
 			} else if("float".equals(types[i])) {
 				t = Double.class;
 			} else if("string".equals(types[i])) {
