@@ -101,9 +101,9 @@ public class CustomOrcOutputFormat extends FileOutputFormat<NullWritable, Text> 
 				}
 				if("int".equals(types[i])) {
 					if("".equals(v[i])) {
-						r[i] = Long.valueOf(0);
+						r[i] = Integer.valueOf(0);
 					} else {
-						r[i] = Long.valueOf(v[i]);
+						r[i] = Integer.valueOf(v[i]);
 					}
 				} else if("float".equals(types[i])) {
 					if("".equals(v[i])) {
