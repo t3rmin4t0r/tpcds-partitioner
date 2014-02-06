@@ -202,7 +202,16 @@ public class ParTable extends Configured implements Tool {
         MultipleOutputs.addNamedOutput(job, "orc", 
                 CustomOrcOutputFormat.class, NullWritable.class, Text.class);
         boolean success = job.waitForCompletion(true);
-
+        
+		if (success) {
+			Iterator<Counter> counters = job.getCounters()
+					.getGroup("org.notmysock.tpcds").iterator();
+			while (counters.hasNext()) {
+				Counter c = counters.next();
+				System.out.printf("%s = %d\n", c.getName(), c.getValue());
+			}
+        }
+       
         return 0;
     }
     
@@ -261,11 +270,16 @@ public class ParTable extends Configured implements Tool {
 
 		protected void setup(Context context) throws IOException {
 			mos = new MultipleOutputs<Text, Text>(context);
+			CustomOrcOutputFormat.badrows = 0;
 		}
 
 		protected void cleanup(Context context) throws IOException,
 				InterruptedException {
 			mos.close();
+			Counter bad = context.getCounter("org.notmysock.tpcds", "badrows");
+			if (bad != null) {
+				bad.increment(CustomOrcOutputFormat.badrows);
+			}
 		}
 		
 		@Override
@@ -374,8 +388,14 @@ public class ParTable extends Configured implements Tool {
 				} else if ("".equals(cols[i])) {
 					key.fields[k] = 0;
 				} else {
-					key.fields[k] = Integer.signum(i)
-							* Integer.parseInt(cols[k]);
+					try {
+						key.fields[k] = Integer.signum(i)
+								* Integer.parseInt(cols[k]);
+					} catch (NumberFormatException ne) {
+						// sort last
+						key.fields[k] = (i < 0) ? Integer.MIN_VALUE
+								: Integer.MAX_VALUE;
+					}
 				}
 			}
 			value.set(lineValue);
