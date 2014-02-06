@@ -53,6 +53,7 @@ public class CustomOrcOutputFormat extends FileOutputFormat<NullWritable, Text> 
 		}
 		OrcFile.WriterOptions opts = OrcFile.writerOptions(conf);
 		opts.blockPadding(true).inspector(new RawDataObjectInspector(types.toArray(new String[0])));
+		opts.compress(CompressionKind.SNAPPY);
 		opts.fileSystem(FileSystem.get(conf));
 		return new CustomOrcRecordWriter(getDefaultWorkFile(tactxt, ".orc"), opts, types.toArray(new String[0]));
 	}
