@@ -46,7 +46,7 @@ public final class RawDataObjectInspector extends SettableStructObjectInspector 
 			if("int".equals(types[i])) {
 				t = Integer.class;
 			} else if("float".equals(types[i])) {
-				t = Double.class;
+				t = Float.class;
 			} else if("string".equals(types[i])) {
 				t = String.class;
 			} else {

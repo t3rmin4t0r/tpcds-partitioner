@@ -121,7 +121,7 @@ public class CustomOrcOutputFormat extends FileOutputFormat<NullWritable, Text> 
 						r[i] = null; 
 					} else {
 						try {
-							r[i] = Double.valueOf(v[i]);
+							r[i] = Float.valueOf(v[i]);
 						} catch (NumberFormatException ne) {
 							r[i] = null;
 							bad = true;
