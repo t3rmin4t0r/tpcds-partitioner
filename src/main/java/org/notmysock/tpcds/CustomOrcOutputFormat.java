@@ -18,6 +18,8 @@ import org.apache.hadoop.mapreduce.*;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 public class CustomOrcOutputFormat extends FileOutputFormat<NullWritable, Text> {
+	
+	public static long badrows = 0;
 
 	public static void setColumns(Configuration conf, String columns) {
 		conf.set("org.notmysock.tpcds.part.cols", columns);
@@ -91,29 +93,45 @@ public class CustomOrcOutputFormat extends FileOutputFormat<NullWritable, Text> 
 		@Override
 		public void write(NullWritable dummy, Text row) throws IOException,
 				InterruptedException {
+			boolean bad = false;
 			Writer w = getWriter();
 			Object[] r = new Object[types.length];
 			String[] v = row.toString().split("\\|");
 			for(int i = 0; i < types.length; i++) {
 				if(i >= v.length) {
 					r[i] = null;
+					bad = true;
 					continue;
 				}
 				if("int".equals(types[i])) {
 					if("".equals(v[i])) {
-						r[i] = Integer.valueOf(0);
+						r[i] = null;
+						bad = true;
 					} else {
-						r[i] = Integer.valueOf(v[i]);
+						try {
+							r[i] = Integer.valueOf(v[i]);
+						} catch (NumberFormatException ne) {
+							r[i] = null;
+							bad = true;
+						}
 					}
 				} else if("float".equals(types[i])) {
 					if("".equals(v[i])) {
-						r[i] = Double.valueOf(0.0); 
+						r[i] = null; 
 					} else {
-						r[i] = Double.valueOf(v[i]);
+						try {
+							r[i] = Double.valueOf(v[i]);
+						} catch (NumberFormatException ne) {
+							r[i] = null;
+							bad = true;
+						}
 					}
 				} else {
 					r[i] = v[i];
 				}
+			}
+			if(bad) {
+				badrows++;
 			}
 			w.addRow(r);
 		}
